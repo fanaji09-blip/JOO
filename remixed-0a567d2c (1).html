@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Dashboard — MT5 Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #080C18;
+    --card: #0F1424;
+    --card2: #141829;
+    --border: #1E2340;
+    --accent: #00D4AA;
+    --gold: #F5A623;
+    --red: #FF5252;
+    --green: #00E676;
+    --yellow: #FFD93D;
+    --text: #E8EAED;
+    --dim: #6B7280;
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,212,170,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; position: relative; z-index: 1; }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding: 24px 28px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: 4px;
+  }
+  .header-left h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+  .header-left p { color: var(--dim); font-size: 12px; font-family: var(--mono); margin-top: 4px; }
+  
+  .upload-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 28px;
+    border: 2px dashed var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(0,212,170,0.04);
+  }
+  .upload-zone:hover { background: rgba(0,212,170,0.1); border-color: var(--gold); }
+  .upload-zone.drag-over { background: rgba(0,212,170,0.15); border-color: var(--gold); }
+  .upload-zone span { font-size: 11px; color: var(--dim); font-family: var(--mono); }
+  .upload-zone strong { font-size: 13px; color: var(--accent); }
+  #fileInput { display: none; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 10px 22px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-family: var(--mono);
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* PAGE */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* STAT CARDS */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 1200px) { .cards-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 18px 16px 14px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.4s both;
+  }
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .stat-card.green::after { background: var(--green); }
+  .stat-card.red::after { background: var(--red); }
+  .stat-card.teal::after { background: var(--accent); }
+  .stat-card.gold::after { background: var(--gold); }
+  .stat-card.yellow::after { background: var(--yellow); }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-family: var(--mono);
+    margin-bottom: 10px;
+  }
+  .stat-value {
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+    font-family: var(--mono);
+  }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.teal { color: var(--accent); }
+  .stat-value.gold { color: var(--gold); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-sub { font-size: 10px; color: var(--dim); margin-top: 6px; font-family: var(--mono); }
+
+  /* CHARTS GRID */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+  
+  .charts-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 900px) { .charts-grid-3 { grid-template-columns: 1fr; } }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+  }
+  .chart-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: var(--mono);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chart-title::before {
+    content: '';
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+  canvas { max-width: 100%; }
+
+  /* TABLE */
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-family: var(--mono);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  thead th {
+    background: #0D1022;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: var(--mono);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  thead th:hover { color: var(--gold); }
+  thead th.sort-asc::after { content: ' ▲'; }
+  thead th.sort-desc::after { content: ' ▼'; }
+  tbody tr:nth-child(even) { background: #0E1222; }
+  tbody tr:nth-child(odd) { background: var(--card); }
+  tbody tr:hover { background: #141E32; }
+  tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(30,35,64,0.5);
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .profit-pos { color: var(--green); font-weight: 700; }
+  .profit-neg { color: var(--red); font-weight: 700; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .badge-buy { background: rgba(0,230,118,0.15); color: var(--green); }
+  .badge-sell { background: rgba(255,82,82,0.15); color: var(--red); }
+  .badge-tp { background: rgba(0,212,170,0.15); color: var(--accent); }
+  .badge-so { background: rgba(255,82,82,0.2); color: var(--red); }
+  .badge-user { background: rgba(245,166,35,0.15); color: var(--gold); }
+  .badge-xau { background: rgba(245,166,35,0.1); color: var(--gold); }
+  .badge-btc { background: rgba(255,217,61,0.1); color: var(--yellow); }
+
+  /* CALENDAR */
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .cal-day-header {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent);
+    font-family: var(--mono);
+    padding: 8px 0;
+  }
+  .cal-day {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 8px;
+    min-height: 80px;
+    position: relative;
+    transition: all 0.15s;
+  }
+  .cal-day:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .cal-day.empty { background: #070A14; border-color: transparent; }
+  .cal-day.has-profit { border-color: rgba(0,230,118,0.3); background: rgba(0,230,118,0.05); }
+  .cal-day.has-loss { border-color: rgba(255,82,82,0.3); background: rgba(255,82,82,0.05); }
+  .cal-day.weekend { opacity: 0.5; }
+  .cal-num {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--dim);
+    font-family: var(--mono);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .cal-day.has-profit .cal-num { color: var(--green); }
+  .cal-day.has-loss .cal-num { color: var(--red); }
+  .cal-pnl {
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+  .cal-pnl.pos { color: var(--green); }
+  .cal-pnl.neg { color: var(--red); }
+  .cal-trades { font-size: 9px; color: var(--dim); margin-top: 3px; font-family: var(--mono); }
+  .cal-dots { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+  .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .cal-dot.win { background: var(--green); }
+  .cal-dot.loss { background: var(--red); }
+
+  /* FILTERS */
+  .filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--dim);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--mono);
+    transition: all 0.15s;
+  }
+  .filter-btn:hover, .filter-btn.active { 
+    border-color: var(--accent); 
+    color: var(--accent); 
+    background: rgba(0,212,170,0.08);
+  }
+  .filter-search {
+    padding: 7px 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: var(--mono);
+    outline: none;
+    width: 200px;
+  }
+  .filter-search:focus { border-color: var(--accent); }
+
+  /* BREAKDOWN */
+  .breakdown-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 700px) { .breakdown-grid { grid-template-columns: 1fr; } }
+
+  .breakdown-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+  }
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-label { color: var(--dim); font-family: var(--mono); font-size: 11px; }
+  .breakdown-value { font-weight: 700; font-family: var(--mono); font-size: 13px; }
+
+  /* PROGRESS BAR */
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s ease;
+  }
+
+  /* ANIMS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .stat-card:nth-child(1) { animation-delay: 0.05s; }
+  .stat-card:nth-child(2) { animation-delay: 0.10s; }
+  .stat-card:nth-child(3) { animation-delay: 0.15s; }
+  .stat-card:nth-child(4) { animation-delay: 0.20s; }
+  .stat-card:nth-child(5) { animation-delay: 0.25s; }
+  .stat-card:nth-child(6) { animation-delay: 0.30s; }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--dim);
+    font-family: var(--mono);
+  }
+  .empty-state .big { font-size: 48px; margin-bottom: 16px; }
+  .empty-state p { font-size: 13px; margin-bottom: 8px; }
+
+  /* TOOLTIP */
+  .tooltip-container { position: relative; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  .mb16 { margin-bottom: 16px; }
+  .mb28 { margin-bottom: 28px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width:700px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-left">
+      <h1>⚡ TRADING DASHBOARD</h1>
+      <p id="data-info">No data loaded — upload your MT5 CSV export</p>
+    </div>
+    <label class="upload-zone" id="dropZone">
+      <strong>📂 Upload CSV</strong>
+      <span>Drop MT5 export here or click to browse</span>
+      <input type="file" id="fileInput" accept=".csv">
+    </label>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
+    <div class="tab" data-tab="trades">📋 All Trades</div>
+    <div class="tab" data-tab="calendar">📅 Calendar</div>
+    <div class="tab" data-tab="statistics">📈 Statistics</div>
+  </div>
+
+  <!-- DASHBOARD PAGE -->
+  <div class="page active" id="page-dashboard">
+    <div class="cards-grid" id="stat-cards"></div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Equity Curve — Cumulative P&L</div>
+        <canvas id="equityChart" height="100"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Win / Loss Distribution</div>
+        <canvas id="winLossChart" height="160"></canvas>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Daily P&L</div>
+        <canvas id="dailyChart" height="100"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">P&L by Symbol</div>
+        <canvas id="symbolChart" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRADES PAGE -->
+  <div class="page" id="page-trades">
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="buy">BUY</button>
+      <button class="filter-btn" data-filter="sell">SELL</button>
+      <button class="filter-btn" data-filter="XAUUSD">XAUUSD</button>
+      <button class="filter-btn" data-filter="BTCUSD">BTCUSD</button>
+      <button class="filter-btn" data-filter="tp">TP</button>
+      <button class="filter-btn" data-filter="so">SO</button>
+      <button class="filter-btn" data-filter="user">User</button>
+      <input class="filter-search" id="tradeSearch" type="text" placeholder="Search ticket...">
+    </div>
+    <div class="table-wrap">
+      <table id="tradesTable">
+        <thead>
+          <tr>
+            <th data-sort="ticket">Ticket</th>
+            <th data-sort="open_time">Open Time</th>
+            <th data-sort="close_time">Close Time</th>
+            <th data-sort="type">Type</th>
+            <th data-sort="symbol">Symbol</th>
+            <th data-sort="lots">Lots</th>
+            <th data-sort="open_price">Open</th>
+            <th data-sort="close_price">Close</th>
+            <th data-sort="profit">Profit</th>
+            <th data-sort="close_reason">Reason</th>
+          </tr>
+        </thead>
+        <tbody id="tradesBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CALENDAR PAGE -->
+  <div class="page" id="page-calendar">
+    <div id="calendarContainer"></div>
+  </div>
+
+  <!-- STATISTICS PAGE -->
+  <div class="page" id="page-statistics">
+    <div class="two-col mb28">
+      <div class="breakdown-card">
+        <div class="section-title">By Direction</div>
+        <div id="breakdown-direction"></div>
+      </div>
+      <div class="breakdown-card">
+        <div class="section-title">By Symbol</div>
+        <div id="breakdown-symbol"></div>
+      </div>
+    </div>
+    <div class="two-col mb28">
+      <div class="breakdown-card">
+        <div class="section-title">By Close Reason</div>
+        <div id="breakdown-reason"></div>
+      </div>
+      <div class="breakdown-card">
+        <div class="section-title">Key Metrics</div>
+        <div id="breakdown-metrics"></div>
+      </div>
+    </div>
+    <div class="chart-card mb28">
+      <div class="chart-title">P&L Distribution per Trade</div>
+      <canvas id="distChart" height="60"></canvas>
+    </div>
+    <div class="breakdown-card">
+      <div class="section-title">Daily Breakdown</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Trades</th><th>Wins</th><th>Losses</th>
+            <th>Win Rate</th><th>Total P&L</th><th>Best</th><th>Worst</th><th>Cumulative</th>
+          </tr></thead>
+          <tbody id="dailyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===== SAMPLE DATA =====
+const SAMPLE_CSV = `ticket,opening_time_utc,closing_time_utc,type,lots,original_position_size,symbol,opening_price,closing_price,stop_loss,take_profit,commission,swap,profit,equity,margin_level,close_reason
+2950777516,2026-04-14T13:18:12,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.69,4803.488,,,,,-967912.57,-1074770.44,,so
+2950777391,2026-04-14T13:18:10,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.493,4803.488,,,,,-978039.69,-1074770.44,,so
+2950777376,2026-04-14T13:18:10,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.493,4803.488,,,,,-978039.69,-1074770.44,,so
+2950777315,2026-04-14T13:18:09,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.493,4803.606,,,,,-984218.96,-1074770.44,,so
+2950777175,2026-04-14T13:18:08,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.134,4803.606,,,,,-1002756.74,-1093308.24,,so
+2950770432,2026-04-14T13:17:04,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.066,4803.606,,,,,-1006189.66,-1093308.24,,so
+2950770416,2026-04-14T13:17:04,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.001,4803.522,,,,,-1005331.43,-1093308.24,,so
+2950770407,2026-04-14T13:17:04,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.001,4803.368,,,,,-997264.06,-1067561.3,,so
+2950770386,2026-04-14T13:17:04,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4784.001,4803.368,,,,,-997264.06,-1011089.72,,so
+2950770353,2026-04-14T13:17:04,2026-04-14T13:38:29,sell,0.03,0.03,XAUUSD,4783.819,4802.229,,,,,-948001.62,-1034261.96,,so
+2950770339,2026-04-14T13:17:03,2026-04-14T13:38:28,sell,0.03,0.03,XAUUSD,4783.635,4802.324,,,,,-962248.25,-484307.74,,so
+2947879308,2026-04-14T03:08:02,2026-04-14T06:52:59,buy,0.03,0.03,XAUUSD,4769.849,4777.127,,4777.127,,,373524.73,,,tp
+2947945173,2026-04-14T05:34:20,2026-04-14T06:52:47,buy,0.03,0.03,XAUUSD,4760.733,4776.981,,4776.981,,,833971.38,,,tp
+2947898882,2026-04-14T02:57:08,2026-04-14T03:07:46,sell,0.03,0.03,XAUUSD,4774.694,4770.387,,4770.387,,,221040.33,,,tp
+2947824639,2026-04-14T02:39:50,2026-04-14T02:47:17,buy,0.03,0.03,XAUUSD,4769.436,4776.217,,4776.217,,,348004.99,,,tp
+2946955644,2026-04-13T22:25:11,2026-04-14T02:39:28,sell,0.03,0.03,XAUUSD,4747.216,4768.761,,4726.43,,,-1109222.5,,,user
+2944189270,2026-04-13T12:48:52,2026-04-13T14:28:21,sell,0.03,0.03,XAUUSD,4720.408,4717.036,,,,,173094.44,,,user
+2944346133,2026-04-13T13:11:23,2026-04-13T14:28:17,sell,0.03,0.03,XAUUSD,4726.838,4717.004,,,,,505072.81,,,user
+2943965371,2026-04-13T12:11:47,2026-04-13T12:20:34,sell,0.03,0.03,XAUUSD,4717.505,4712.329,,,,,266490.8,,,user
+2941634449,2026-04-13T04:17:00,2026-04-13T11:34:36,sell,0.03,0.03,XAUUSD,4715.631,4720.487,,4700.213,,,-249938.4,,,user
+2941641334,2026-04-13T04:11:23,2026-04-13T04:16:59,buy,0.03,0.03,XAUUSD,4712.8,4715.375,,4715.375,,,132116.49,,,tp
+2940163757,2026-04-12T21:06:11,2026-04-12T21:11:25,sell,0.13,0.13,BTCUSD,71416.02,71330.15,,71330.15,,,190422.1,,,tp
+2940036272,2026-04-12T15:46:02,2026-04-12T21:06:05,sell,0.13,0.13,BTCUSD,70884.87,71436.99,,70811.21,,,-1228293.03,,,user
+2940002394,2026-04-12T15:06:33,2026-04-12T15:43:52,buy,0.13,0.13,BTCUSD,70778.17,70911.7,,70911.7,,,296212.15,,,tp
+2939411722,2026-04-11T23:30:10,2026-04-12T14:50:00,buy,0.13,0.13,BTCUSD,73148.78,70780.17,,73397.78,,,-5269099.88,-3089.08,,so
+2939264335,2026-04-11T17:55:02,2026-04-11T18:17:17,buy,0.13,0.13,BTCUSD,73114.08,73171.85,,73209.39,,,128142.47,,,user
+2939264780,2026-04-11T17:45:48,2026-04-11T17:55:00,sell,0.13,0.13,BTCUSD,73179.67,73117.51,,73117.51,,,137868.33,,,tp`;
+
+// ===== STATE =====
+let trades = [];
+let charts = {};
+let sortCol = 'open_time', sortDir = 1;
+let filterType = 'all', filterSearch = '';
+
+// ===== CSV PARSER =====
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const vals = line.split(',');
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (vals[i] || '').trim());
+    return obj;
+  });
+}
+
+function processTrades(raw) {
+  return raw.map(r => ({
+    ticket: r.ticket,
+    open_time: r.opening_time_utc,
+    close_time: r.closing_time_utc,
+    type: r.type,
+    symbol: r.symbol,
+    lots: parseFloat(r.lots) || 0,
+    open_price: parseFloat(r.opening_price) || 0,
+    close_price: parseFloat(r.closing_price) || 0,
+    sl: parseFloat(r.stop_loss) || 0,
+    tp: parseFloat(r.take_profit) || 0,
+    profit: parseFloat(r.profit) || 0,
+    equity: parseFloat(r.equity) || 0,
+    close_reason: r.close_reason,
+    date: (r.opening_time_utc || '').slice(0, 10),
+  }));
+}
+
+// ===== STATS =====
+function calcStats(ts) {
+  const profits = ts.map(t => t.profit);
+  const wins = profits.filter(p => p > 0);
+  const losses = profits.filter(p => p < 0);
+  const total = profits.reduce((a, b) => a + b, 0);
+  const grossProfit = wins.reduce((a, b) => a + b, 0);
+  const grossLoss = losses.reduce((a, b) => a + b, 0);
+  const avgWin = wins.length ? wins.reduce((a,b)=>a+b,0)/wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((a,b)=>a+b,0)/losses.length : 0;
+  const pf = grossLoss ? Math.abs(grossProfit/grossLoss) : 0;
+  const rr = avgLoss ? Math.abs(avgWin/avgLoss) : 0;
+  return {
+    total: ts.length, winCount: wins.length, lossCount: losses.length,
+    winRate: ts.length ? wins.length/ts.length : 0,
+    netPnl: total, grossProfit, grossLoss,
+    avgWin, avgLoss, pf, rr,
+    maxWin: wins.length ? Math.max(...wins) : 0,
+    maxLoss: losses.length ? Math.min(...losses) : 0,
+  };
+}
+
+// ===== FORMATTERS =====
+const fmt = n => new Intl.NumberFormat('id-ID', {minimumFractionDigits: 0, maximumFractionDigits: 0}).format(n);
+const fmtPct = n => (n*100).toFixed(1) + '%';
+const fmtX = n => n.toFixed(2) + 'x';
+
+function pnlClass(n) { return n >= 0 ? 'profit-pos' : 'profit-neg'; }
+function pnlStr(n) { return (n >= 0 ? '+' : '') + fmt(n); }
+
+// ===== RENDER DASHBOARD =====
+function renderDashboard() {
+  const s = calcStats(trades);
+  const cards = [
+    { label: 'Total Trades', value: s.total, sub: `${s.winCount}W / ${s.lossCount}L`, cls: 'teal', vcls: 'teal' },
+    { label: 'Win Rate', value: fmtPct(s.winRate), sub: `${s.winCount} wins`, cls: s.winRate >= 0.5 ? 'green' : 'red', vcls: s.winRate >= 0.5 ? 'green' : 'red' },
+    { label: 'Net P&L', value: pnlStr(s.netPnl), sub: s.netPnl >= 0 ? 'Profitable' : 'In loss', cls: s.netPnl >= 0 ? 'green' : 'red', vcls: s.netPnl >= 0 ? 'green' : 'red' },
+    { label: 'Profit Factor', value: fmtX(s.pf), sub: s.pf >= 1 ? 'Positive edge' : 'Negative edge', cls: s.pf >= 1 ? 'gold' : 'red', vcls: s.pf >= 1 ? 'gold' : 'red' },
+    { label: 'Avg Win', value: fmt(s.avgWin), sub: 'per winning trade', cls: 'green', vcls: 'green' },
+    { label: 'Avg Loss', value: fmt(s.avgLoss), sub: 'per losing trade', cls: 'red', vcls: 'red' },
+  ];
+
+  document.getElementById('stat-cards').innerHTML = cards.map(c => `
+    <div class="stat-card ${c.cls}">
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value ${c.vcls}">${c.value}</div>
+      <div class="stat-sub">${c.sub}</div>
+    </div>
+  `).join('');
+
+  // Equity Curve
+  const daily = getDailyMap();
+  const days = Object.keys(daily).sort();
+  let cum = 0;
+  const cumData = days.map(d => { cum += daily[d].reduce((a,b)=>a+b,0); return cum; });
+
+  destroyChart('equityChart');
+  charts.equityChart = new Chart(document.getElementById('equityChart'), {
+    type: 'line',
+    data: {
+      labels: days,
+      datasets: [{
+        label: 'Equity Curve',
+        data: cumData,
+        borderColor: '#F5A623',
+        backgroundColor: 'rgba(245,166,35,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: '#F5A623',
+        borderWidth: 2.5,
+      }]
+    },
+    options: { ...baseChartOpts(), plugins: { ...baseChartOpts().plugins, legend: { display: false } } }
+  });
+
+  // Win/Loss Pie
+  destroyChart('winLossChart');
+  charts.winLossChart = new Chart(document.getElementById('winLossChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Win', 'Loss'],
+      datasets: [{ data: [s.winCount, s.lossCount], backgroundColor: ['rgba(0,230,118,0.8)', 'rgba(255,82,82,0.8)'], borderColor: '#0F1424', borderWidth: 3 }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#9AA0B0', font: { family: 'Space Mono', size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${fmtPct(ctx.parsed/s.total)})` } }
+      },
+      cutout: '65%',
+    }
+  });
+
+  // Daily Bar
+  const dailyPnls = days.map(d => daily[d].reduce((a,b)=>a+b,0));
+  destroyChart('dailyChart');
+  charts.dailyChart = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels: days,
+      datasets: [{
+        label: 'Daily P&L',
+        data: dailyPnls,
+        backgroundColor: dailyPnls.map(v => v >= 0 ? 'rgba(0,230,118,0.7)' : 'rgba(255,82,82,0.7)'),
+        borderColor: dailyPnls.map(v => v >= 0 ? '#00E676' : '#FF5252'),
+        borderWidth: 1,
+        borderRadius: 3,
+      }]
+    },
+    options: { ...baseChartOpts(), plugins: { ...baseChartOpts().plugins, legend: { display: false } } }
+  });
+
+  // Symbol P&L
+  const symbols = [...new Set(trades.map(t => t.symbol))];
+  const symPnls = symbols.map(s => trades.filter(t => t.symbol === s).reduce((a, t) => a + t.profit, 0));
+  destroyChart('symbolChart');
+  charts.symbolChart = new Chart(document.getElementById('symbolChart'), {
+    type: 'bar',
+    data: {
+      labels: symbols,
+      datasets: [{
+        label: 'P&L by Symbol',
+        data: symPnls,
+        backgroundColor: symPnls.map((v, i) => ['rgba(245,166,35,0.7)','rgba(255,217,61,0.7)'][i % 2]),
+        borderColor: ['#F5A623','#FFD93D'],
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: { ...baseChartOpts(), indexAxis: 'y', plugins: { ...baseChartOpts().plugins, legend: { display: false } } }
+  });
+}
+
+function baseChartOpts() {
+  return {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#9AA0B0', font: { family: 'Space Mono', size: 11 } } },
+      tooltip: { backgroundColor: '#141829', titleColor: '#00D4AA', bodyColor: '#E8EAED', borderColor: '#1E2340', borderWidth: 1 }
+    },
+    scales: {
+      x: { ticks: { color: '#6B7280', font: { family: 'Space Mono', size: 9 } }, grid: { color: 'rgba(30,35,64,0.5)' } },
+      y: { ticks: { color: '#6B7280', font: { family: 'Space Mono', size: 9 } }, grid: { color: 'rgba(30,35,64,0.5)' } }
+    }
+  };
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+// ===== RENDER TRADES TABLE =====
+function renderTrades() {
+  let filtered = [...trades];
+  if (filterType !== 'all') {
+    filtered = filtered.filter(t => t.type === filterType || t.symbol === filterType || t.close_reason === filterType);
+  }
+  if (filterSearch) {
+    filtered = filtered.filter(t => t.ticket.includes(filterSearch));
+  }
+  filtered.sort((a, b) => {
+    const av = a[sortCol], bv = b[sortCol];
+    return typeof av === 'number' ? (av - bv) * sortDir : String(av).localeCompare(String(bv)) * sortDir;
+  });
+
+  document.getElementById('tradesBody').innerHTML = filtered.map(t => `
+    <tr>
+      <td>${t.ticket}</td>
+      <td>${t.open_time.replace('T',' ')}</td>
+      <td>${t.close_time.replace('T',' ')}</td>
+      <td><span class="badge badge-${t.type}">${t.type.toUpperCase()}</span></td>
+      <td><span class="badge ${t.symbol === 'XAUUSD' ? 'badge-xau' : 'badge-btc'}">${t.symbol}</span></td>
+      <td>${t.lots}</td>
+      <td>${t.open_price.toFixed(3)}</td>
+      <td>${t.close_price.toFixed(3)}</td>
+      <td class="${pnlClass(t.profit)}">${pnlStr(t.profit)}</td>
+      <td><span class="badge badge-${t.close_reason}">${t.close_reason.toUpperCase()}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ===== RENDER CALENDAR =====
+function getDailyMap() {
+  const m = {};
+  trades.forEach(t => {
+    if (!m[t.date]) m[t.date] = [];
+    m[t.date].push(t.profit);
+  });
+  return m;
+}
+
+function renderCalendar() {
+  const daily = getDailyMap();
+  const dates = Object.keys(daily).sort();
+  if (!dates.length) return;
+
+  const months = [...new Set(dates.map(d => d.slice(0, 7)))];
+  let html = '';
+
+  months.forEach(month => {
+    const [year, mo] = month.split('-').map(Number);
+    const firstDay = new Date(year, mo - 1, 1).getDay(); // 0=Sun
+    const dayOffset = (firstDay + 6) % 7; // convert to Mon-based
+    const daysInMonth = new Date(year, mo, 0).getDate();
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    html += `<div class="section-title mb16">${monthNames[mo-1]} ${year}</div>`;
+    html += '<div class="calendar-grid">';
+    ['MON','TUE','WED','THU','FRI','SAT','SUN'].forEach(d => {
+      html += `<div class="cal-day-header">${d}</div>`;
+    });
+
+    for (let i = 0; i < dayOffset; i++) html += '<div class="cal-day empty"></div>';
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(mo).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const ps = daily[dateStr] || [];
+      const total = ps.reduce((a,b)=>a+b,0);
+      const weekday = (dayOffset + day - 1) % 7;
+      const isWeekend = weekday >= 5;
+      let cls = 'cal-day';
+      if (isWeekend) cls += ' weekend';
+      if (ps.length) cls += total >= 0 ? ' has-profit' : ' has-loss';
+
+      const wins = ps.filter(p=>p>0).length;
+      const losses = ps.filter(p=>p<0).length;
+      const dots = ps.length > 0 ? 
+        [...Array(Math.min(wins,8)).fill('<div class="cal-dot win"></div>'),
+         ...Array(Math.min(losses,8)).fill('<div class="cal-dot loss"></div>')].join('') : '';
+
+      html += `<div class="${cls}">
+        <div class="cal-num">${day}</div>
+        ${ps.length ? `<div class="cal-pnl ${total>=0?'pos':'neg'}">${pnlStr(total)}</div>
+        <div class="cal-trades">${ps.length} trade${ps.length>1?'s':''}</div>
+        <div class="cal-dots">${dots}</div>` : ''}
+      </div>`;
+    }
+    html += '</div><br>';
+  });
+
+  document.getElementById('calendarContainer').innerHTML = html;
+}
+
+// ===== RENDER STATISTICS =====
+function renderStatistics() {
+  const s = calcStats(trades);
+  const daily = getDailyMap();
+  const days = Object.keys(daily).sort();
+
+  // Direction breakdown
+  const bdir = ['buy','sell'].map(type => {
+    const ts = trades.filter(t => t.type === type);
+    const st = calcStats(ts);
+    return { label: type.toUpperCase(), ...st };
+  });
+  document.getElementById('breakdown-direction').innerHTML = bdir.map(b => `
+    <div class="breakdown-row">
+      <div class="breakdown-label"><span class="badge badge-${b.label.toLowerCase()}">${b.label}</span></div>
+      <div>
+        <div class="breakdown-value ${pnlClass(b.netPnl)}">${pnlStr(b.netPnl)}</div>
+        <div style="font-size:9px;color:var(--dim);font-family:var(--mono)">${b.total} trades · ${fmtPct(b.winRate)} WR</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${(b.winRate*100)}%;background:${b.winRate>=0.5?'var(--green)':'var(--red)'}"></div></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Symbol breakdown
+  const symbols = [...new Set(trades.map(t => t.symbol))];
+  const bsym = symbols.map(sym => {
+    const ts = trades.filter(t => t.symbol === sym);
+    return { label: sym, ...calcStats(ts) };
+  });
+  document.getElementById('breakdown-symbol').innerHTML = bsym.map(b => `
+    <div class="breakdown-row">
+      <div class="breakdown-label"><span class="badge ${b.label==='XAUUSD'?'badge-xau':'badge-btc'}">${b.label}</span></div>
+      <div>
+        <div class="breakdown-value ${pnlClass(b.netPnl)}">${pnlStr(b.netPnl)}</div>
+        <div style="font-size:9px;color:var(--dim);font-family:var(--mono)">${b.total} trades · ${fmtPct(b.winRate)} WR</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${(b.winRate*100)}%;background:${b.winRate>=0.5?'var(--green)':'var(--red)'}"></div></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Reason breakdown
+  const reasons = [...new Set(trades.map(t => t.close_reason))];
+  const breason = reasons.map(r => {
+    const ts = trades.filter(t => t.close_reason === r);
+    return { label: r, ...calcStats(ts) };
+  });
+  document.getElementById('breakdown-reason').innerHTML = breason.map(b => `
+    <div class="breakdown-row">
+      <span class="breakdown-label"><span class="badge badge-${b.label}">${b.label.toUpperCase()}</span></span>
+      <div>
+        <div class="breakdown-value ${pnlClass(b.netPnl)}">${pnlStr(b.netPnl)}</div>
+        <div style="font-size:9px;color:var(--dim);font-family:var(--mono)">${b.total} trades · ${fmtPct(b.winRate)} WR</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Key metrics
+  document.getElementById('breakdown-metrics').innerHTML = [
+    ['Max Win', pnlStr(s.maxWin), 'green'],
+    ['Max Loss', pnlStr(s.maxLoss), 'red'],
+    ['Avg Win', fmt(s.avgWin), 'green'],
+    ['Avg Loss', fmt(s.avgLoss), 'red'],
+    ['Profit Factor', fmtX(s.pf), s.pf >= 1 ? 'gold' : 'red'],
+    ['Risk:Reward', fmtX(s.rr), s.rr >= 1 ? 'gold' : 'red'],
+    ['Gross Profit', fmt(s.grossProfit), 'green'],
+    ['Gross Loss', fmt(s.grossLoss), 'red'],
+  ].map(([label, val, cls]) => `
+    <div class="breakdown-row">
+      <span class="breakdown-label">${label}</span>
+      <span class="breakdown-value" style="color:var(--${cls})">${val}</span>
+    </div>
+  `).join('');
+
+  // Distribution chart
+  const profits = trades.map(t => t.profit).sort((a,b) => a-b);
+  destroyChart('distChart');
+  charts.distChart = new Chart(document.getElementById('distChart'), {
+    type: 'bar',
+    data: {
+      labels: profits.map((_, i) => `T${i+1}`),
+      datasets: [{
+        label: 'P&L per Trade',
+        data: profits,
+        backgroundColor: profits.map(v => v >= 0 ? 'rgba(0,230,118,0.6)' : 'rgba(255,82,82,0.6)'),
+        borderWidth: 0,
+        borderRadius: 2,
+      }]
+    },
+    options: { ...baseChartOpts(), plugins: { ...baseChartOpts().plugins, legend: { display: false } } }
+  });
+
+  // Daily table
+  let cum = 0;
+  document.getElementById('dailyBody').innerHTML = days.map(d => {
+    const ps = daily[d];
+    const total = ps.reduce((a,b)=>a+b,0);
+    cum += total;
+    const w = ps.filter(p=>p>0).length;
+    const l = ps.filter(p=>p<0).length;
+    const wr = ps.length ? w/ps.length : 0;
+    return `<tr>
+      <td>${d}</td>
+      <td style="text-align:center">${ps.length}</td>
+      <td class="profit-pos" style="text-align:center">${w}</td>
+      <td class="profit-neg" style="text-align:center">${l}</td>
+      <td style="text-align:center;color:var(--yellow)">${fmtPct(wr)}</td>
+      <td class="${pnlClass(total)}">${pnlStr(total)}</td>
+      <td class="profit-pos">${pnlStr(Math.max(...ps))}</td>
+      <td class="profit-neg">${pnlStr(Math.min(...ps))}</td>
+      <td class="${pnlClass(cum)}">${pnlStr(cum)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== RENDER ALL =====
+function renderAll() {
+  renderDashboard();
+  renderTrades();
+  renderCalendar();
+  renderStatistics();
+  const minDate = trades.map(t=>t.date).sort()[0];
+  const maxDate = trades.map(t=>t.date).sort().pop();
+  document.getElementById('data-info').textContent = 
+    `${trades.length} trades loaded  ·  ${minDate} → ${maxDate}`;
+}
+
+// ===== FILE UPLOAD =====
+function loadCSV(text) {
+  const raw = parseCSV(text);
+  trades = processTrades(raw);
+  renderAll();
+}
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadCSV(ev.target.result);
+  reader.readAsText(file);
+});
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadCSV(ev.target.result);
+  reader.readAsText(file);
+});
+
+// ===== TABS =====
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('page-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ===== FILTER BUTTONS =====
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterType = btn.dataset.filter;
+    renderTrades();
+  });
+});
+
+document.getElementById('tradeSearch').addEventListener('input', e => {
+  filterSearch = e.target.value;
+  renderTrades();
+});
+
+// ===== SORT TABLE =====
+document.querySelectorAll('thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.sort;
+    if (sortCol === col) sortDir *= -1;
+    else { sortCol = col; sortDir = 1; }
+    document.querySelectorAll('thead th').forEach(h => h.classList.remove('sort-asc','sort-desc'));
+    th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+    renderTrades();
+  });
+});
+
+// ===== INIT WITH SAMPLE DATA =====
+loadCSV(SAMPLE_CSV);
+</script>
+</body>
+</html>
